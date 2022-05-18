@@ -13,7 +13,7 @@ ingestor = "block_ingestor_node"
 shard = "primary"
 protocol = "arweave"
 provider = [
-  { label = "arweave-mainnet", details = { type = "firehose", url = "http://host.docker.internal:16042" }},
+  { label = "arweave-mainnet", details = { type = "firehose", url = "https://mainnet.arweave.streamingfast.io:443" , token = ""  }},
 ]
 
 [deployment]

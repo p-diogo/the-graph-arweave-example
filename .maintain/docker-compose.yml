@@ -8,12 +8,17 @@ services:
       - "5002:8080"
     volumes:
       - ./data/ipfs:/data/ipfs
+
   postgres:
     container_name: postgres-gn
     image: postgres:14
     ports:
       - "5432:5432"
-    command: ["postgres", "-cshared_preload_libraries=pg_stat_statements"]
+    command:
+      [
+        "postgres",
+        "-cshared_preload_libraries=pg_stat_statements"
+      ]
     environment:
       POSTGRES_USER: graph-node
       POSTGRES_PASSWORD: let-me-in
@@ -21,50 +26,59 @@ services:
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "5432"]
+      test: ["CMD", "pg_isready", "-q", "-d", "graph-node", "-U", "graph-node"]
       interval: 30s
       timeout: 10s
       retries: 15
+
   pgweb:
     container_name: pgweb-gn
     image: sosedoff/pgweb:0.11.10
     restart: on-failure
     ports:
       - "8081:8081"
-    command: ["pgweb", "--bind=0.0.0.0", "--listen=8081", "--binary-codec=hex"]
+    command:
+      [
+        "pgweb",
+        "--bind=0.0.0.0",
+        "--listen=8081",
+        "--binary-codec=hex"
+      ]
     links:
       - postgres:postgres
     environment:
       - DATABASE_URL=postgres://graph-node:let-me-in@postgres:5432/graph-node?sslmode=disable
     depends_on:
-      - postgres
-  firehose:
-    container_name: firehose-arweave
-    image: firehose-arweave
-    volumes:
-      - ./data/fire-data:/fire-data
-    build:
-      context: ../.modules/firehose-arweave
-      dockerfile: ./Dockerfile
-    ports:
-      - "16042:16042"
-    command: ["--mindreader-node-endpoints", "https://arweave.net,http://65.108.126.145:1984"]
+      postgres:
+        condition: service_healthy
+
+  # firehose:
+  #   container_name: firehose-arweave
+  #   image: firehose-arweave
+  #   volumes:
+  #     - ./data/fire-data:/fire-data
+  #   build:
+  #     context: ../.modules/firehose-arweave
+  #     dockerfile: ./Dockerfile
+  #   ports:
+  #     - "16042:16042"
+  #   command: ["--mindreader-node-endpoints", "https://arweave.net,http://65.108.126.145:1984"]
+
   graph-node:
     container_name: graph-node
-    image: graph-node
-    environment:
-      CARGO_NET_GIT_FETCH_WITH_CLI: true
-    build:
-      context: ../.modules/graph-node
-      dockerfile: ../../.maintain/graph-node.Dockerfile
+    image: graphprotocol/graph-node:caa54c1
     volumes:
-      - ./config.toml:/config.toml
+      - ./config.toml:/root/graph-node-configs/config.toml
+    environment:
+      ipfs: '${IPFS_ENDPOINT:-http://host.docker.internal:5001}'
+      GRAPH_NODE_CONFIG: /root/graph-node-configs/config.toml
     links:
       - postgres:postgres
       - ipfs:ipfs/go-ipfs
-      - firehose:firehose-arweave
-    command: ["--config", "/config.toml", "--ipfs", "http://host.docker.internal:5001"]
     restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8020:8020"
       - "8000:8000"
